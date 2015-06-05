@@ -5,10 +5,27 @@
 // 4 -- user picks list from dropdown/list/animation
 // 5 -- user clicks submit
 // 6 -- user receives visual confirmation submission went through
+//----------------------------------------------------------------------
+
+var enable, widget, submit, checkStatus
 
 function iconChange() {
 //on user 'click' icon is replaced with new icon (same icon, but different color)
-};
+//below is modelled off of animal-crossing-music, available here: https://github.com/andrewrabon/animal-crossing-music/blob/master/extension.js
+	chrome.browserAction.onClicked.addListener(function() {
+  	var callback = function() {
+    	checkStatus();
+    	if (audio.paused) {
+      	audio.play();
+      	updateTime();
+      	updateText(currentTime, day);
+    	}
+    	else {
+      	audio.pause();
+      	updateText(-1, day);
+    	}
+  	};
+	};
 
 function getText() {
 //get the selection and store it in a variable
