@@ -1,118 +1,425 @@
-// Copyright (c) 2014 The Chromium Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style license that can be
-// found in the LICENSE file.
 
-/**
- * Get the current URL.
- *
- * @param {function(string)} callback - called when the URL of the current tab
- *   is found.
- */
-function getCurrentTabUrl(callback) {
-  // Query filter to be passed to chrome.tabs.query - see
-  // https://developer.chrome.com/extensions/tabs#method-query
-  var queryInfo = {
-    active: true,
-    currentWindow: true
-  };
+function Popup(options, style){
+    
 
-  chrome.tabs.query(queryInfo, function(tabs) {
-    // chrome.tabs.query invokes the callback with a list of tabs that match the
-    // query. When the popup is opened, there is certainly a window and at least
-    // one tab, so we can safely assume that |tabs| is a non-empty array.
-    // A window can only have one active tab at a time, so the array consists of
-    // exactly one tab.
-    var tab = tabs[0];
+    var _popupNode = _createPopupNode();
+    _popupNode.classList.add("mainmenu");
 
-    // A tab is a plain object that provides information about the tab.
-    // See https://developer.chrome.com/extensions/tabs#type-Tab
-    var url = tab.url;
+    var _input = _createInputField(_popupNode);
+    var _currentSelection = "";
+    var _active = false;
+    var _listeners = [];
 
-    // tab.url is only available if the "activeTab" permission is declared.
-    // If you want to see the URL of other tabs (e.g. after removing active:true
-    // from |queryInfo|), then the "tabs" permission is required to see their
-    // "url" properties.
-    console.assert(typeof url == 'string', 'tab.url should be a string');
-
-    callback(url);
-  });
-
-  // Most methods of the Chrome extension APIs are asynchronous. This means that
-  // you CANNOT do something like this:
-  //
-  // var url;
-  // chrome.tabs.query(queryInfo, function(tabs) {
-  //   url = tabs[0].url;
-  // });
-  // alert(url); // Shows "undefined", because chrome.tabs.query is async.
-}
-
-/**
- * @param {string} searchTerm - Search term for Google Image search.
- * @param {function(string,number,number)} callback - Called when an image has
- *   been found. The callback gets the URL, width and height of the image.
- * @param {function(string)} errorCallback - Called when the image is not found.
- *   The callback gets a string that describes the failure reason.
- */
-function getImageUrl(searchTerm, callback, errorCallback) {
-  // Google image search - 100 searches per day.
-  // https://developers.google.com/image-search/
-  var searchUrl = 'https://ajax.googleapis.com/ajax/services/search/images' +
-    '?v=1.0&q=' + encodeURIComponent(searchTerm);
-  var x = new XMLHttpRequest();
-  x.open('GET', searchUrl);
-  // The Google image search API responds with JSON, so let Chrome parse it.
-  x.responseType = 'json';
-  x.onload = function() {
-    // Parse and process the response from Google Image Search.
-    var response = x.response;
-    if (!response || !response.responseData || !response.responseData.results ||
-        response.responseData.results.length === 0) {
-      errorCallback('No response from Google Image search!');
-      return;
+    var _this = this;
+    
+    this.addActionListener = function(listener){
+        _listeners.push(listener);
     }
-    var firstResult = response.responseData.results[0];
-    // Take the thumbnail instead of the full image to get an approximately
-    // consistent image size.
-    var imageUrl = firstResult.tbUrl;
-    var width = parseInt(firstResult.tbWidth);
-    var height = parseInt(firstResult.tbHeight);
-    console.assert(
-        typeof imageUrl == 'string' && !isNaN(width) && !isNaN(height),
-        'Unexpected respose from the Google Image Search API!');
-    callback(imageUrl, width, height);
-  };
-  x.onerror = function() {
-    errorCallback('Network error.');
-  };
-  x.send();
+
+    /*
+     * Returns if the menu is currently being displayed.
+     */
+    this.isActive = function(){
+        return _active;
+    }
+
+
+    /*
+     * Sets the current selection
+     */
+    this.setSelection = function(sel){
+        _setSelection(sel);
+        _input.value = sel;
+    }
+
+    /*
+     * Returns the current selections.
+     */
+    this.getSelection = function(){
+        return _currentSelection;
+    }
+
+
+    /*
+     * Returns the root popup node element.
+     */
+    this.getNode = function(){
+        return _popupNode;
+    }
+
+
+    /*
+     * Shows the menu at the specified position
+     */
+    this.show = function(x, y){
+
+        _showPopupNode(x, y, _popupNode);
+        _active = true;
+
+    }
+
+    /*
+     * Hides the menu node
+     */
+    this.hide = function(){
+        _hidePopupNode(_popupNode);
+        _active = false;
+    }
+
+    
+    /*
+     * Shows the menu.
+     * Used to create a preview of the popup on
+     * the options page.
+     */
+    this.showForPreview = function(){
+
+        _popupNode.style.position = "static";
+        _popupNode.style.display = "block";
+    }
+
+    /*
+     * Sets the search engines
+     */
+    this.setSearchEngines = function(engines){
+        _addEngines(engines, _popupNode);
+
+    }
+
+
+    /*
+     * Sets the icons for the current engines
+     */
+    this.setIcons = function(icons){
+        var engineNodes = _popupNode.getElementsByTagName("a");
+        var len = Math.min(engineNodes.length, icons.length);
+        for(var i=0; i < len; i++){
+            var img = _createIconNode(icons[i]);
+            engineNodes[i].insertBefore(img, engineNodes[i].firstChild);
+        }
+    }
+
+    /*
+     * Sets the icons for the specified indexes
+     */
+    this.setIconForIndexes = function(icon, indexes){
+        var imgNodes = _popupNode.getElementsByTagName("img");
+        var len = imgNodes.length;
+        for(var i=0; i < len; i++){
+            if(indexes.indexOf(i) !== -1){
+                imgNodes[i].src = icon;
+            }
+        }
+    }
+
+
+
+    function _setSelection(value){
+        _currentSelection = value;
+    }
+
+    function _createIconNode(url){
+
+        var img = document.createElement("img");
+        img.className = "engine-img";
+        img.src = url;
+        return img;
+
+
+    }
+
+
+    function _addEngines(engines, _parent){
+        for(var i=0; i < engines.length; i++){
+            _addEngine(engines[i], _parent);
+        }
+    }
+
+
+    function _addEngine(engine, _parent){
+            
+        if(options.separate_menus && engine.hide_in_popup)
+            return;
+
+        if(engine.is_submenu){
+            _parent.appendChild(_createSubMenu(engine));
+        }
+        else if(engine.is_separator){
+            _parent.appendChild(_createSeparator(engine));
+        }
+        else{
+            _parent.appendChild(_createEngine(engine));
+        }
+
+    }
+
+
+    function _createPopupNode(){
+
+        var node = document.createElement("ul");
+        node.className = "popup common";
+        node.style.display = "none";
+
+        node.addEventListener("mousedown", function(e){
+
+            // node.style.display="block";
+            // e.preventDefault();
+            e.stopPropagation();
+
+        });
+
+        return node;
+
+    }
+
+
+    function _createInputField(parentItem){
+
+        var item = document.createElement('li');
+        var input = document.createElement('input');
+        input.type = 'text';
+        item.appendChild(input);
+        
+        _addInputEvents(input);
+        parentItem.appendChild(item);
+        // document.documentElement.appendChild(item);
+
+        return input;
+    }
+
+
+    function _createSubMenu(engine){
+
+
+        var li = document.createElement("li");
+        var a = document.createElement("a");
+        var name = document.createElement("span");
+
+        a.className = "engine-url";
+        name.className = "engine-name";
+
+        name.innerText = engine.name;
+        a.href = "#";
+
+        li.appendChild(a);
+        a.appendChild(name);
+
+        var node = _createPopupNode();
+
+        
+        node.classList.add("submenu");
+
+        li.appendChild(node);
+
+        _addSubMenuEvents(engine, node, a);
+
+        _addEngines(engine.engines, node);
+
+        return li;
+
+    }
+
+
+    function _createSeparator(engine){
+
+        var li = document.createElement("li");
+
+        li.className="engine-separator";
+
+        return li;
+
+    }
+
+
+    /*
+     * Creates the html for a search engine without icon.
+     *
+     * <li><a class="engine-url" href="#"><span class="engine-name"></span></a></li>
+     */
+    function _createEngine(engine){
+
+        var li = document.createElement("li");
+        var a = document.createElement("a");
+        var name = document.createElement("span");
+        a.className = "engine-url";
+        name.className = "engine-name";
+
+        name.innerText = engine.name;
+
+        li.appendChild(a);
+        a.appendChild(name);
+
+        _addEngineEvents(engine, a);
+
+        return li;
+    }
+
+
+    function _addInputEvents(input){
+
+        input.addEventListener('input', function(e){
+
+            _setSelection(input.value);
+
+        });
+
+    }
+
+
+    function _addEngineEvents(engine, a){
+        // Update the href value.
+        a.addEventListener("mouseenter", function(e){
+
+            _onEnterAction(e, engine, a);
+            // a.href = engine.url.replace("%s", _this.getSelection());
+
+        });
+
+        a.addEventListener("click", function(e){
+
+            _onClickAction(e, engine, a);
+
+        });
+    }
+
+    
+    function _onClickAction(evt, engine, a){
+
+        for(var i in _listeners){
+            _listeners[i].onClick(evt, engine, a);
+        }
+
+    }
+
+    function _onEnterAction(evt, engine, a){
+
+        for(var i in _listeners){
+            _listeners[i].onEnter(evt, engine, a);
+        }
+
+    }
+
+
+    function _addSubMenuEvents(engine, node, a){
+
+
+        a.addEventListener("click", function(e){
+
+            _onClickAction(e, engine, a);
+
+        });
+
+        if(engine.hidemenu) // The submenu shold not be shown
+            return;
+
+
+        var hide_timer = null; // hide timer id
+        var show_timer = null; // show timer id
+
+        // show the menu when mouse enters the anchor element
+        a.addEventListener("mouseenter", function(e){
+
+            _onEnterAction(e, engine, a);
+
+            // do nothing if we already is getting ready to show.
+            if(show_timer)
+                return;
+
+
+            // Don't hide if menu is already showing.
+            clearTimeout(hide_timer);
+            hide_timer = null;
+
+            show_timer = setTimeout(function(){
+                _showPopupNodeRelativeToAnchor(a, node);
+                show_timer = null;
+            }, 200);
+
+        });
+
+
+        // Hide the menu
+        a.addEventListener("mouseleave", function(){
+
+            // Don't show the menu if the mouse leavs before it is shown.
+            clearTimeout(show_timer);
+            show_timer = null;
+
+            // Do nothing if we already is going to hide.
+            if(hide_timer)
+                return;
+
+
+            hide_timer = setTimeout(function(){
+                _hidePopupNode(node);
+                hide_timer = null;
+            }, 200);
+
+        });
+
+        // Keep the menu visible when mouse is above the menu.
+        node.addEventListener("mouseenter", function(){
+
+            a.classList.add("active");
+
+            // Prevent the menu from hiding
+            clearTimeout(hide_timer);
+            hide_timer = null;
+
+            _showPopupNodeRelativeToAnchor(a, node);
+        });
+
+        // Hide the menu when the mouse leavs the menu.
+        node.addEventListener("mouseleave", function(){
+            
+            a.classList.remove("active");
+
+            // Do nothing if we already are going to hide.
+            if(hide_timer)
+                return;
+
+            hide_timer = setTimeout(function(){
+                _hidePopupNode(node);
+                hide_timer = null;
+            }, 200);
+        });
+
+
+    }
+
+    /*
+     * Hides the popup node
+     */
+    function _hidePopupNode(node){
+
+        node.style.display = "none";
+
+    }
+
+    /*
+     * Shows the popup node
+     */
+    function _showPopupNode(x, y, node){
+
+        node.style.left = x + "px";
+        node.style.top = y + "px";
+
+        // Keep it inside the screen
+        Positioning.checkPosition(node);
+
+        node.style.display = "block";
+
+    }
+
+    /*
+     * Shows the popup node
+     */
+    function _showPopupNodeRelativeToAnchor(a, node){
+
+        var pos = Positioning.calculateSubmenuPosition(a, node, style);
+
+        _showPopupNode(pos.x, pos.y, node);
+
+    }
+
 }
-
-function renderStatus(statusText) {
-  document.getElementById('status').textContent = statusText;
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-  getCurrentTabUrl(function(url) {
-    // Put the image URL in Google search.
-    renderStatus('Performing Google Image search for ' + url);
-
-    getImageUrl(url, function(imageUrl, width, height) {
-
-      renderStatus('Search term: ' + url + '\n' +
-          'Google image search result: ' + imageUrl);
-      var imageResult = document.getElementById('image-result');
-      // Explicitly set the width/height to minimize the number of reflows. For
-      // a single image, this does not matter, but if you're going to embed
-      // multiple external images in your page, then the absence of width/height
-      // attributes causes the popup to resize multiple times.
-      imageResult.width = width;
-      imageResult.height = height;
-      imageResult.src = imageUrl;
-      imageResult.hidden = false;
-
-    }, function(errorMessage) {
-      renderStatus('Cannot display image. ' + errorMessage);
-    });
-  });
-});

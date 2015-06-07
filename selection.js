@@ -12,7 +12,8 @@ var enable, widget, submit, checkStatus
 function iconChange() {
 //on user 'click' icon is replaced with new icon (same icon, but different color)
 //below is modelled off of animal-crossing-music, available here: https://github.com/andrewrabon/animal-crossing-music/blob/master/extension.js
-	chrome.browserAction.onClicked.addListener(function() {
+	chrome.browserAction.onClicked.setIcon(function() {
+  chrome.browserAction.onClicked.addListener(function() {
   	var callback = function() {
     	checkStatus();
     	if (audio.paused) {
